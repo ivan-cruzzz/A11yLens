@@ -93,6 +93,11 @@ import {
   type ScanResult,
   type Standard,
 } from "@/lib/types";
+import {
+  buildRemediationPlan,
+  isCleanReport,
+  simulateScores,
+} from "@/engine/report";
 import { cn } from "@/lib/utils";
 
 const SCAN_PHASES = [
@@ -133,10 +138,13 @@ function ScanPage() {
   const [url, setUrl] = useState(initialUrl);
   const [standard, setStandard] = useState<Standard>("AA");
   const [device, setDevice] = useState<Device>("desktop");
+  const [maxPages, setMaxPages] = useState(4);
   const [engine, setEngine] = useState<{ model: EngineId; effort: string }>({
     model: "deep",
     effort: "medium",
   });
+  // Симуляция «если исправите»: id нарушений и находок, отмеченных чекбоксом.
+  const [fixedIds, setFixedIds] = useState<Set<string>>(new Set());
 
   const [scanning, setScanning] = useState(false);
   const [phase, setPhase] = useState(0);
@@ -205,8 +213,14 @@ function ScanPage() {
         2600
       );
       try {
-        const submission = await submitScan({ url: target, standard, device });
+        const submission = await submitScan({
+          url: target,
+          standard,
+          device,
+          maxPages,
+        });
         setResult(submission.result);
+        setFixedIds(new Set());
         setDiff(submission.diff);
         setWatching(submission.watching);
         if (submission.watchEntries) {
@@ -226,7 +240,7 @@ function ScanPage() {
         setScanning(false);
       }
     },
-    [url, standard, device]
+    [url, standard, device, maxPages]
   );
 
   // Автозапуск при переходе с лендинга с ?url=
@@ -251,9 +265,11 @@ function ScanPage() {
           html: target.html,
           standard,
           device,
+          maxPages,
         });
         const scanned = submission.result;
         setResult(scanned);
+        setFixedIds(new Set());
         setDiff(submission.diff);
         setWatching(submission.watching);
         if (submission.watchEntries) {
@@ -283,7 +299,7 @@ function ScanPage() {
         setScanning(false);
       }
     },
-    [standard, device]
+    [standard, device, maxPages]
   );
 
   const exportPdf = useCallback(async () => {
@@ -340,6 +356,17 @@ function ScanPage() {
     if (!result) {
       return [];
     }
+    const toggleFixed = (id: string, fixed: boolean) => {
+      setFixedIds((prev) => {
+        const next = new Set(prev);
+        if (fixed) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+        return next;
+      });
+    };
     const tabs = [
       { id: "all", title: "Все нарушения", icon: ListChecksIcon },
       { id: "contrast", title: "Контрасты", icon: ContrastIcon },
@@ -371,8 +398,10 @@ function ScanPage() {
               violations.map((violation, index) => (
                 <ViolationRow
                   engine={engine.model}
+                  fixed={fixedIds.has(violation.id)}
                   index={index}
                   key={violation.id}
+                  onToggleFixed={(value) => toggleFixed(violation.id, value)}
                   violation={violation}
                 />
               ))
@@ -382,31 +411,55 @@ function ScanPage() {
       };
     });
 
-    const securityTab = result.security
-      ? {
-          id: "security",
-          title: `Безопасность · ${
-            result.security.findings.filter((item) => item.severity !== "info")
-              .length
-          }`,
-          icon: ShieldIcon,
-          content: (
-            <div className="grid items-start gap-3 sm:grid-cols-2">
-              {result.security.findings.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground sm:col-span-2">
-                  Проблем безопасности не найдено — отличная защита!
-                </p>
-              ) : (
-                result.security.findings.map((item) => (
-                  <SecurityRow finding={item} key={item.id} />
-                ))
-              )}
-            </div>
-          ),
-        }
-      : null;
+    let securityTab: (typeof a11yTabs)[number] | null = null;
+    if (result.security) {
+      const audit = result.security;
+      // Находка без evidence не показывается как сработавшая (R02.1).
+      const confirmed = audit.findings.filter((item) => item.evidence);
+      const hidden = audit.findings.length - confirmed.length;
+      securityTab = {
+        id: "security",
+        title: `Безопасность · ${
+          confirmed.filter((item) => item.severity !== "info").length
+        }`,
+        icon: ShieldIcon,
+        content: (
+          <div className="grid items-start gap-3 sm:grid-cols-2">
+            {audit.error ? (
+              <p
+                className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground sm:col-span-2"
+                role="alert"
+              >
+                Аудит безопасности не выполнен: {audit.error}
+              </p>
+            ) : confirmed.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground sm:col-span-2">
+                {audit.findings.length > 0
+                  ? `Находки скрыты (${audit.findings.length}): в этом отчёте нет доказательств — формат старой версии. Сделайте новый скан.`
+                  : "Проблем безопасности не найдено — отличная защита!"}
+              </p>
+            ) : (
+              confirmed.map((item) => (
+                <SecurityRow
+                  fixed={fixedIds.has(item.id)}
+                  finding={item}
+                  key={item.id}
+                  onToggleFixed={(value) => toggleFixed(item.id, value)}
+                />
+              ))
+            )}
+            {hidden > 0 && !audit.error ? (
+              <p className="text-center text-muted-foreground text-xs sm:col-span-2">
+                {hidden} находок без доказательств скрыто — они не показаны как
+                сработавшие.
+              </p>
+            ) : null}
+          </div>
+        ),
+      };
+    }
     return [...a11yTabs, ...(securityTab ? [securityTab] : [])];
-  }, [result, engine.model]);
+  }, [result, engine.model, fixedIds]);
 
   const lightboxImages = useMemo(() => {
     if (!result) {
@@ -464,6 +517,8 @@ function ScanPage() {
     if (!result) {
       return [];
     }
+    const simulation =
+      fixedIds.size > 0 ? simulateScores(result, fixedIds) : null;
     const countCard = (category: Category): WidgetGridItem => ({
       id: `count-${category}`,
       title: CATEGORY_LABELS[category],
@@ -499,6 +554,18 @@ function ScanPage() {
               <p className="truncate text-muted-foreground">
                 {result.meta.title.slice(0, 42)}
               </p>
+              {simulation ? (
+                <p
+                  aria-live="polite"
+                  className="font-semibold tabular-nums text-foreground"
+                >
+                  Если исправите отмеченное: {simulation.score}
+                </p>
+              ) : (
+                <p className="text-muted-foreground text-xs">
+                  Отмечайте нарушения галочкой — увидите новый скор
+                </p>
+              )}
             </div>
           </div>
         ),
@@ -512,18 +579,42 @@ function ScanPage() {
               defaultSpan: 2,
               render: () => (
                 <div className="flex items-center gap-4">
-                  <ScoreCounter size="sm" value={result.security!.score} />
-                  <div className="min-w-0 text-sm">
-                    <p className="font-medium">Проверок: {result.security!.checksRun}</p>
-                    <p className="text-muted-foreground">
-                      Находок:{" "}
-                      {
-                        result.security!.findings.filter(
-                          (item) => item.severity !== "info"
-                        ).length
-                      }
-                    </p>
-                  </div>
+                  {result.security!.error ? (
+                    <div className="min-w-0 text-sm">
+                      <p className="font-medium">Аудит не выполнен</p>
+                      <p className="text-muted-foreground">
+                        {result.security!.error}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <ScoreCounter size="sm" value={result.security!.score} />
+                      <div className="min-w-0 text-sm">
+                        <p className="font-medium">
+                          Проверок: {result.security!.checksRun}
+                        </p>
+                        <p className="text-muted-foreground">
+                          Находок:{" "}
+                          {
+                            result.security!.findings.filter(
+                              (item) =>
+                                item.severity !== "info" && item.evidence
+                            ).length
+                          }
+                        </p>
+                        {simulation &&
+                        simulation.securityScore !== null &&
+                        simulation.securityScore !== result.security!.score ? (
+                          <p
+                            aria-live="polite"
+                            className="font-semibold tabular-nums text-foreground"
+                          >
+                            Если исправите: {simulation.securityScore}
+                          </p>
+                        ) : null}
+                      </div>
+                    </>
+                  )}
                 </div>
               ),
             },
@@ -538,14 +629,25 @@ function ScanPage() {
             <li>Правил пройдено: {result.meta.passedRules}</li>
             <li>Правил нарушено: {result.totalViolations}</li>
             <li>Элементов с проблемой: {result.totalNodes}</li>
+            <li>
+              Страниц просканировано: {result.pages?.length ?? 1}
+              {maxPages > 1 ? ` (лимит ${maxPages})` : ""}
+            </li>
             <li>Время: {(result.meta.loadMs / 1000).toFixed(1)} с</li>
           </ul>
         ),
       },
     ];
-  }, [result]);
+  }, [result, fixedIds, maxPages]);
 
   const showProgress = scanning || Boolean(result) || Boolean(error);
+
+  // План исправления и «чисто»-состояние (R03.1, R03.3).
+  const planSteps = useMemo(
+    () => (result ? buildRemediationPlan(result) : []),
+    [result]
+  );
+  const clean = result ? isCleanReport(result) : false;
 
   const paletteActions: PaletteAction[] = useMemo(
     () => [
@@ -763,6 +865,26 @@ function ScanPage() {
                   </button>
                 ))}
               </fieldset>
+              <fieldset className="flex items-center gap-2 rounded-xl border border-border px-3 py-1.5">
+                <legend className="sr-only">Сколько страниц сканировать</legend>
+                <span className="text-muted-foreground text-xs">Страниц</span>
+                {[1, 2, 3, 4].map((count) => (
+                  <button
+                    aria-pressed={maxPages === count}
+                    className={cn(
+                      "rounded-lg px-2 py-0.5 font-mono text-xs font-medium transition-colors",
+                      maxPages === count
+                        ? "bg-primary/15 text-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                    key={count}
+                    onClick={() => setMaxPages(count)}
+                    type="button"
+                  >
+                    {count}
+                  </button>
+                ))}
+              </fieldset>
               <div className="ml-auto flex items-center gap-3">
                 {result ? (
                   <label className="flex cursor-pointer items-center gap-2 text-muted-foreground text-xs">
@@ -916,26 +1038,153 @@ function ScanPage() {
                 />
               </div>
 
-              {/* Нарушения по вкладкам */}
-              <motion.h2
-                className="mt-12 text-xl font-semibold tracking-tight"
-                initial={{ opacity: 0, y: 10 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-60px" }}
-              >
-                Нарушения
-              </motion.h2>
-              <div className="mt-4">
-                <SmoothTab
-                  activeColor="bg-primary"
-                  activeTextColor="text-primary-foreground"
-                  items={tabItems}
-                  label="Категории нарушений"
-                />
-              </div>
+              {clean ? (
+                /* «Чисто»-состояние: пустой отчёт не бывает просто пустым (R03.3) */
+                <div
+                  className="mt-8 rounded-2xl border border-border bg-card/50 p-8 text-center"
+                  role="status"
+                >
+                  <p className="font-semibold text-xl">Чисто!</p>
+                  <p className="mx-auto mt-2 max-w-xl text-muted-foreground text-sm">
+                    Нарушений доступности и подтверждённых проблем безопасности
+                    не найдено. Вот что стоит сделать дальше:
+                  </p>
+                  <ul className="mx-auto mt-5 max-w-xl space-y-2 text-left text-sm">
+                    <li className="rounded-xl border border-border px-4 py-3">
+                      Отметьте «Следить за сайтом» — при следующих сканах
+                      увидите дельту скорa и письма не понадобятся.
+                    </li>
+                    <li className="rounded-xl border border-border px-4 py-3">
+                      Проверьте внутренние страницы: увеличьте лимит «Страниц»
+                      в панели запуска и запустите скан снова.
+                    </li>
+                    <li className="rounded-xl border border-border px-4 py-3">
+                      Загляните в{" "}
+                      <Link
+                        className="underline underline-offset-2 hover:text-foreground"
+                        href="/guide"
+                      >
+                        гайд по WCAG
+                      </Link>{" "}
+                      — он поможет удержать сайт чистым при следующих правках.
+                    </li>
+                  </ul>
+                </div>
+              ) : (
+                <>
+                  {/* План исправления: действия по убыванию эффекта (R03.1) */}
+                  {planSteps.length > 0 ? (
+                    <>
+                      <motion.h2
+                        className="mt-12 text-xl font-semibold tracking-tight"
+                        initial={{ opacity: 0, y: 10 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true, margin: "-60px" }}
+                      >
+                        План исправления
+                      </motion.h2>
+                      <p className="mt-1 text-muted-foreground text-sm">
+                        Шаги отсортированы по эффекту на скор; усилие оценено
+                        по шкале минуты/часы/дни.
+                      </p>
+                      <ol className="mt-4 space-y-3">
+                        {planSteps.map((step, index) => (
+                          <li
+                            className="rounded-xl border border-border bg-card/60 p-4"
+                            key={step.id}
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted font-mono text-muted-foreground text-xs">
+                                {index + 1}
+                              </span>
+                              <span className="font-medium text-sm">
+                                {step.title}
+                              </span>
+                              <span className="ml-auto flex flex-wrap gap-1.5">
+                                {step.scoreGain > 0 ? (
+                                  <span className="rounded-full border border-foreground/40 bg-foreground/10 px-2 py-0.5 font-semibold tabular-nums text-[11px] text-foreground">
+                                    +{step.scoreGain} к скору
+                                  </span>
+                                ) : null}
+                                <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+                                  усилие: {step.effortLabel}
+                                </span>
+                                <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+                                  {step.kind === "security"
+                                    ? "безопасность"
+                                    : "доступность"}
+                                </span>
+                              </span>
+                            </div>
+                            <p className="mt-2 text-muted-foreground text-[13px] leading-relaxed">
+                              {step.why}
+                            </p>
+                            <p className="mt-2 rounded-lg border border-border bg-background px-3 py-2 text-[13px] leading-relaxed">
+                              <span className="font-medium">Как исправить: </span>
+                              {step.recommendation}
+                            </p>
+                          </li>
+                        ))}
+                      </ol>
+                    </>
+                  ) : null}
+
+                  {/* Просканированные страницы (R02) */}
+                  {result.pages && result.pages.length > 0 ? (
+                    <>
+                      <h2 className="mt-12 text-xl font-semibold tracking-tight">
+                        Просканированные страницы
+                      </h2>
+                      <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+                        {result.pages.map((page) => (
+                          <li
+                            className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card/60 px-4 py-3 text-sm"
+                            key={page.url}
+                          >
+                            <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+                              {page.isMain ? "главная" : "внутренняя"}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate font-medium">
+                              {page.title}
+                            </span>
+                            <span className="truncate font-mono text-muted-foreground text-xs">
+                              {page.url}
+                            </span>
+                            <span className="shrink-0 font-semibold tabular-nums">
+                              нарушений: {page.violations}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+
+                  {/* Нарушения по вкладкам */}
+                  <motion.h2
+                    className="mt-12 text-xl font-semibold tracking-tight"
+                    initial={{ opacity: 0, y: 10 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-60px" }}
+                  >
+                    Нарушения
+                  </motion.h2>
+                  <p className="mt-1 text-muted-foreground text-sm">
+                    Отмечайте галочкой «исправлено» — скоры выше пересчитаются
+                    без пересканирования.
+                  </p>
+                  <div className="mt-4">
+                    <SmoothTab
+                      activeColor="bg-primary"
+                      activeTextColor="text-primary-foreground"
+                      items={tabItems}
+                      label="Категории нарушений"
+                    />
+                  </div>
+                </>
+              )}
 
               {/* Скриншоты */}
-              {lightboxImages.length > 0 ? (
+              {lightboxImages.length > 0 && !clean ? (
                 <>
                   <h2 className="mt-12 flex items-center gap-2 text-xl font-semibold tracking-tight">
                     <CameraIcon

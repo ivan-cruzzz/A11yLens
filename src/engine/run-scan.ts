@@ -1,11 +1,13 @@
 /**
  * Конвейер сканирования: Playwright + axe-core + пассивный security-аудит.
  * Без Next-зависимостей — импортируется API-роутом, CLI и десктоп-сборкой.
+ * Мультистраничный обход (до maxPages страниц) и доказательства находок —
+ * в связке с engine/scan.ts и engine/advice.
  */
 
 import { AxeBuilder } from "@axe-core/playwright";
 import { chromium, type Browser, type Page, type Response } from "playwright";
-import { categoryOf } from "../lib/knowledge";
+import { categoryOf, whyForRule, whyForSecurity } from "./advice";
 import {
   auditCookies,
   auditHeaders,
@@ -18,14 +20,18 @@ import {
   probeSensitiveFiles,
   type CookieInfo,
 } from "./security";
+import { IMPACT_ORDER } from "./scoring";
 import {
-  IMPACT_ORDER,
-  computeAccessibilityScore,
-} from "./scoring";
+  aggregatePages,
+  attachEvidence,
+  clampMaxPages,
+  pickInternalLinks,
+  withFetchRecorder,
+  type PageScanResult,
+} from "./scan";
 import { withTimeout } from "./timeout";
 import { assertPublicHttpUrl, normalizeUrl } from "./url-guard";
 import type {
-  Category,
   Device,
   Impact,
   ScanRequest,
@@ -56,7 +62,6 @@ const TAGS_BY_STANDARD: Record<Standard, string[]> = {
   AAA: [
     "wcag2a",
     "wcag2aa",
-    "wcag2aaa",
     "wcag21a",
     "wcag21aa",
     "wcag21aaa",
@@ -76,6 +81,11 @@ const MAX_NODES_PER_VIOLATION = 4;
 const MAX_ELEMENT_SHOTS = 16;
 /** Анализ доступности не может длиться бесконечно (тяжёлые страницы). */
 const AXE_ANALYZE_TIMEOUT_MS = 45_000;
+/** Пауза на отрисовку: главная и подстраницы. */
+const MAIN_RENDER_PAUSE_MS = 1200;
+const SUBPAGE_RENDER_PAUSE_MS = 500;
+/** Подстраницы грузятся с меньшим таймаутом: они не стоят весь отчёт. */
+const SUBPAGE_TIMEOUT_MS = 20_000;
 
 async function captureElement(
   page: Page,
@@ -103,9 +113,85 @@ function rawPageIsFile(pageUrl: string): boolean {
   return pageUrl === "about:blank" || !/^https?:\/\//i.test(pageUrl);
 }
 
+/** Общий бюджет элементных скриншотов на весь мультистраничный скан. */
+interface ShotBudget {
+  used: number;
+}
+
+/**
+ * Анализ доступности одной страницы: axe + сбор нарушений с доказательствами
+ * (снимки элементов — в пределах общего бюджета скана).
+ */
+async function auditPageA11y(
+  page: Page,
+  standard: Standard,
+  shots: ShotBudget
+): Promise<{
+  violations: Violation[];
+  passedRules: number;
+  incompleteRules: number;
+}> {
+  const builder = new AxeBuilder({ page }).withTags(TAGS_BY_STANDARD[standard]);
+  const axeResult = await withTimeout(
+    builder.analyze(),
+    AXE_ANALYZE_TIMEOUT_MS,
+    "Анализ доступности не уложился в отведённое время — страница слишком тяжёлая, попробуйте другую страницу сайта"
+  );
+
+  const violations: Violation[] = [];
+  const sorted = [...(axeResult.violations ?? [])]
+    .sort(
+      (a, b) =>
+        (IMPACT_ORDER[(a.impact ?? "minor") as Impact] ?? 3) -
+        (IMPACT_ORDER[(b.impact ?? "minor") as Impact] ?? 3)
+    )
+    .slice(0, MAX_VIOLATIONS);
+
+  for (const violation of sorted) {
+    const nodes: ViolationNode[] = [];
+    const targets = (violation.nodes ?? []).slice(0, MAX_NODES_PER_VIOLATION);
+    for (const node of targets) {
+      const selector = String(node.target?.[0] ?? node.html.slice(0, 60));
+      let snippet = node.html ?? "";
+      if (snippet.length > 160) {
+        snippet = `${snippet.slice(0, 157)}…`;
+      }
+      const entry: ViolationNode = { selector, snippet };
+      if (shots.used < MAX_ELEMENT_SHOTS) {
+        const shot = await captureElement(page, selector);
+        if (shot) {
+          entry.screenshot = shot;
+          shots.used += 1;
+        }
+      }
+      nodes.push(entry);
+    }
+
+    violations.push({
+      id: violation.id,
+      title: violation.help,
+      help: violation.help,
+      helpUrl: violation.helpUrl,
+      impact: (violation.impact ?? "minor") as Impact,
+      category: categoryOf(violation.id),
+      tags: violation.tags ?? [],
+      nodes,
+      // «Почему это проблема — человеку» сразу в отчёте (R03).
+      why: whyForRule(violation.id),
+    });
+  }
+
+  return {
+    violations,
+    passedRules: axeResult.passes?.length ?? 0,
+    incompleteRules: axeResult.incomplete?.length ?? 0,
+  };
+}
+
 /**
  * Пассивный аудит безопасности: данные собраны при загрузке страницы,
  * плюс безопасные GET-пробы и проверка HTTPS-редиректа.
+ * Каждая находка получает evidence — конкретное доказательство (R02.1).
  */
 async function securityAudit(
   page: Page,
@@ -125,7 +211,7 @@ async function securityAudit(
     const pageIsHttps = url.protocol === "https:";
     const headerMap: Record<string, string> = {};
     for (const [key, value] of Object.entries(response.headers())) {
-      headerMap[key] = value;
+      headerMap[key.toLowerCase()] = value;
     }
 
     // Куки контекста после загрузки страницы.
@@ -163,10 +249,24 @@ async function securityAudit(
     });
 
     // Сетевые проверки (редирект + пробы) независимы — идут параллельно.
-    const [redirectFindings, probeFindings] = await Promise.all([
-      auditHttpsRedirect(url.hostname),
-      probeSensitiveFiles(url.origin),
-    ]);
+    // Журналируем fetch, чтобы у проб были доказательства со статусом и
+    // фрагментом тела.
+    const hostname = url.hostname;
+    const { value, log } = await withFetchRecorder(
+      (fetchUrl) => {
+        try {
+          return new URL(fetchUrl).hostname === hostname;
+        } catch {
+          return false;
+        }
+      },
+      () =>
+        Promise.all([
+          auditHttpsRedirect(hostname),
+          probeSensitiveFiles(url.origin),
+        ])
+    );
+    const [redirectFindings, probeFindings] = value;
 
     const findings = [
       ...auditHeaders(headerMap),
@@ -182,8 +282,20 @@ async function securityAudit(
       ...probeFindings,
     ];
 
-    // checksRun вычисляется из реестра проверок внутри buildSecurityAudit.
-    return buildSecurityAudit(findings);
+    // checksRun вычисляется из реестра проверок внутри buildSecurityAudit;
+    // evidence — из контекста загрузки, why — из словаря объяснений.
+    const withEvidence = attachEvidence(findings, {
+      headers: headerMap,
+      cookies: cookieInfos,
+      insecureResources: pageData.insecureResources,
+      externals: pageData.externals,
+      poweredBy: headerMap["x-powered-by"],
+      generator: pageData.generator,
+      jqueryVersion: pageData.jqueryVersion,
+      fetchLog: log,
+    }).map((finding) => ({ ...finding, why: whyForSecurity(finding.id) }));
+
+    return buildSecurityAudit(withEvidence);
   } catch (error) {
     // Аудит не должен ломать основной отчёт — но и молчать о сбое:
     // в отчёт уходит строка ошибки.
@@ -198,6 +310,7 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
     : normalizeUrl(options.url ?? "", {
         allowPrivateNetwork: options.allowPrivateNetwork,
       });
+  const maxPages = clampMaxPages(options.maxPages);
   let browser: Browser | null = null;
   const startedAt = Date.now();
 
@@ -228,7 +341,7 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
       });
     }
     // Даём странице отрисоваться (шрифты, ленивые картинки).
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(MAIN_RENDER_PAUSE_MS);
 
     // Пассивный аудит безопасности — параллельно анализу доступности,
     // ошибка аудита не влияет на отчёт.
@@ -237,14 +350,9 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
       : securityAudit(page, mainResponse, page.url());
 
     const title = await page.title();
-    const builder = new AxeBuilder({ page }).withTags(
-      TAGS_BY_STANDARD[options.standard]
-    );
-    const axeResult = await withTimeout(
-      builder.analyze(),
-      AXE_ANALYZE_TIMEOUT_MS,
-      "Анализ доступности не уложился в отведённое время — страница слишком тяжёлая, попробуйте другую страницу сайта"
-    );
+    const shots: ShotBudget = { used: 0 };
+    const mainPageUrl = page.url();
+    const mainAudit = await auditPageA11y(page, options.standard, shots);
 
     const pageShotBuffer = await page.screenshot({
       fullPage: true,
@@ -253,69 +361,57 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
       animations: "disabled",
     });
 
-    // Скриншоты проблемных элементов (ограничены, чтобы не раздувать ответ).
-    const violations: Violation[] = [];
-    let elementShots = 0;
-    const sorted = [...(axeResult.violations ?? [])]
-      .sort(
-        (a, b) =>
-          (IMPACT_ORDER[(a.impact ?? "minor") as Impact] ?? 3) -
-          (IMPACT_ORDER[(b.impact ?? "minor") as Impact] ?? 3)
-      )
-      .slice(0, MAX_VIOLATIONS);
+    // Мультистраничный обход (R02): главная + внутренние ссылки того же хоста.
+    const pageResults: PageScanResult[] = [
+      {
+        url: mainPageUrl,
+        title: title || target,
+        isMain: true,
+        loadMs: Math.max(Date.now() - startedAt, 1),
+        passedRules: mainAudit.passedRules,
+        incompleteRules: mainAudit.incompleteRules,
+        violations: mainAudit.violations,
+      },
+    ];
 
-    for (const violation of sorted) {
-      const nodes: ViolationNode[] = [];
-      const targets = (violation.nodes ?? []).slice(0, MAX_NODES_PER_VIOLATION);
-      for (const node of targets) {
-        const selector = String(node.target?.[0] ?? node.html.slice(0, 60));
-        let snippet = node.html ?? "";
-        if (snippet.length > 160) {
-          snippet = `${snippet.slice(0, 157)}…`;
-        }
-        const entry: ViolationNode = { selector, snippet };
-        if (elementShots < MAX_ELEMENT_SHOTS) {
-          const shot = await captureElement(page, selector);
-          if (shot) {
-            entry.screenshot = shot;
-            elementShots += 1;
+    if (!options.html && maxPages > 1) {
+      const hrefs = await page.evaluate(() =>
+        [...document.querySelectorAll("a[href]")].map((anchor) =>
+          anchor.getAttribute("href") ?? ""
+        )
+      );
+      const links = pickInternalLinks(hrefs, mainPageUrl, maxPages - 1);
+      for (const link of links) {
+        const subStartedAt = Date.now();
+        try {
+          const subResponse = await page.goto(link, {
+            waitUntil: "load",
+            timeout: SUBPAGE_TIMEOUT_MS,
+          });
+          // 4xx/5xx — не сканируем: страница-ошибка даст шум, а не пользу.
+          if (!subResponse || subResponse.status() >= 400) {
+            continue;
           }
+          await page.waitForTimeout(SUBPAGE_RENDER_PAUSE_MS);
+          const subAudit = await auditPageA11y(page, options.standard, shots);
+          pageResults.push({
+            url: page.url(),
+            title: (await page.title()) || link,
+            isMain: false,
+            loadMs: Math.max(Date.now() - subStartedAt, 1),
+            passedRules: subAudit.passedRules,
+            incompleteRules: subAudit.incompleteRules,
+            violations: subAudit.violations,
+          });
+        } catch {
+          // Подстраница не открылась — скан не падает, страница пропускается.
         }
-        nodes.push(entry);
       }
-
-      violations.push({
-        id: violation.id,
-        title: violation.help,
-        help: violation.help,
-        helpUrl: violation.helpUrl,
-        impact: (violation.impact ?? "minor") as Impact,
-        category: categoryOf(violation.id),
-        tags: violation.tags ?? [],
-        nodes,
-      });
     }
 
-    const counts = violations.reduce(
-      (acc, violation) => {
-        acc[violation.category] += 1;
-        return acc;
-      },
-      {
-        contrast: 0,
-        alt: 0,
-        keyboard: 0,
-        forms: 0,
-        aria: 0,
-        other: 0,
-      } as Record<Category, number>
-    );
-
-    const totalNodes = violations.reduce(
-      (sum, violation) => sum + Math.max(violation.nodes.length, 1),
-      0
-    );
-    const score = computeAccessibilityScore(violations);
+    const aggregate = aggregatePages(pageResults);
+    const score = aggregate.score;
+    const counts = aggregate.counts;
 
     const host = options.html
       ? "локальный файл"
@@ -338,18 +434,20 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
       device: options.device,
       score,
       counts,
-      totalViolations: violations.length,
-      totalNodes,
+      totalViolations: aggregate.violations.length,
+      totalNodes: aggregate.totalNodes,
       meta: {
         title: title || host,
         loadMs: Date.now() - startedAt,
-        rulesRun: (axeResult.passes?.length ?? 0) + violations.length,
-        passedRules: axeResult.passes?.length ?? 0,
-        incompleteRules: axeResult.incomplete?.length ?? 0,
+        rulesRun: aggregate.rulesRun,
+        passedRules: aggregate.passedRules,
+        incompleteRules: aggregate.incompleteRules,
       },
-      violations,
+      violations: aggregate.violations,
       pageScreenshot: pageShot,
       security: security ?? undefined,
+      // Список страниц имеет смысл только для сканирования по URL.
+      pages: options.html ? undefined : aggregate.pages,
     };
   } finally {
     await browser?.close().catch(() => undefined);

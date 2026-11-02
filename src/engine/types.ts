@@ -34,6 +34,10 @@ export interface Violation {
   category: Category;
   tags: string[];
   nodes: ViolationNode[];
+  /** Страница, на которой найдено нарушение (мультистраничный скан). */
+  pageUrl?: string;
+  /** «Почему это проблема — человеку» (R03); старые отчёты читают словарь. */
+  why?: string;
 }
 
 export interface PageScreenshot {
@@ -57,6 +61,13 @@ export interface SecurityFinding {
   detail: string;
   /** Как исправить. */
   recommendation: string;
+  /**
+   * Доказательство срабатывания: конкретный заголовок/кука/фрагмент (R02.1).
+   * Находка без evidence не считается сработавшей.
+   */
+  evidence?: string;
+  /** «Почему это проблема — человеку» (R03); старые отчёты читают словарь. */
+  why?: string;
 }
 
 export interface SecurityAudit {
@@ -72,6 +83,8 @@ export interface ScanRequest {
   html?: string;
   standard: Standard;
   device: Device;
+  /** Лимит страниц мультистраничного скана (главная + внутренние ссылки). */
+  maxPages?: number;
 }
 
 export interface ScanMeta {
@@ -80,6 +93,17 @@ export interface ScanMeta {
   rulesRun: number;
   passedRules: number;
   incompleteRules: number;
+}
+
+/** Сводка по одной просканированной странице (R02, additive). */
+export interface ScannedPage {
+  url: string;
+  title: string;
+  /** Главная страница скана (первая). */
+  isMain: boolean;
+  /** Сколько нарушений доступности найдено на странице. */
+  violations: number;
+  loadMs: number;
 }
 
 export interface ScanResult {
@@ -98,6 +122,8 @@ export interface ScanResult {
   pageScreenshot?: PageScreenshot;
   /** Появляется, когда сканирование URL (для HTML-файлов не проводится). */
   security?: SecurityAudit;
+  /** Просканированные страницы; для HTML-файлов не заполняется (R02, additive). */
+  pages?: ScannedPage[];
 }
 
 export const SECURITY_SEVERITY_LABELS: Record<SecuritySeverity, string> = {
