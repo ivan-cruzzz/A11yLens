@@ -91,7 +91,28 @@ npm run dev
 | `npm run dev` | Dev-сервер на :3000 |
 | `npm run build` | Production-сборка |
 | `npm start` | Запуск production-сборки |
+| `npm run cli` | CLI `a11ylens scan <url>` — отчёт в терминале (`--json --csv --mode quick\|normal\|deep`) |
 | `node scripts/screenshot.mjs` | Генерация скриншотов для README (`docs/screenshots/`) |
+
+---
+
+## 🪟 Windows-приложение (A11yLens Desktop)
+
+Нативное окно на Tauri 2 **только для Windows**: ввод URL → прогресс по этапам → полный отчёт (доступность + безопасность + нативные проверки TLS/портов/поддоменов/CVE/почты) с локальной историей сканов. При первом запуске — экран «проверяйте только свои сайты или с разрешения» и согласие на докачку Playwright-Chromium; без согласия скан не стартует. Режимы быстро/обычно/глубоко — один конфиг с CLI (`--mode`). Обрыв сети сохраняет попытку с пометкой «неполный», продолжение добирает оставшиеся страницы, а не начинает с нуля.
+
+Движок — тот же CLI, собранный в sidecar-бинарник (Node SEA): на машине пользователя не нужны Node и предустановленные браузеры. Установщик — NSIS («только для меня», ярлык в меню «Пуск») и MSI.
+
+Как собрать установщик самому (Windows 10+, Node ≥ 22.6 и Rust):
+
+```bat
+cd desktop
+npm install
+npm run gen:icons
+npm run build:sidecar      :: sidecar-движок a11ylens-engine.exe
+npm run tauri build        :: установщики в desktop\src-tauri\target\release\bundle\
+```
+
+Подробности — механика продолжения прерванного скана, структура каталога, dev-режим — в [desktop/README.md](desktop/README.md).
 
 ---
 

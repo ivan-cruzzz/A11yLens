@@ -1,0 +1,28 @@
+{
+  "name": "a11ylens-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A11yLens Desktop — нативное Windows-приложение (Tauri 2) над CLI-движком как sidecar",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "tsc -p tsconfig.json",
+    "test": "vitest run --config vitest.config.mts",
+    "gen:icons": "node scripts/gen-icons.mjs",
+    "build:sidecar": "node scripts/build-sidecar.mjs",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "esbuild": "^0.25.0",
+    "postject": "^1.0.0-alpha.6",
+    "react": "^19",
+    "react-dom": "^19",
+    "typescript": "^5",
+    "vite": "^7",
+    "vitest": "^3"
+  }
+}

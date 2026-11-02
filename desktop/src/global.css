@@ -1,0 +1,666 @@
+/*
+ * A11yLens Desktop — визуальный язык веба: монохром zinc, тёмная тема
+ * по умолчанию, иерархия через яркость foreground, карточки с мягким
+ * радиусом. Токены повторяют src/app/globals.css (.dark / :root),
+ * плюс зарезервированный акцентный токен --accent (пока монохром —
+ * синхронно с вебом, к акцентной волне меняется в одном месте).
+ */
+
+:root {
+  --background: #fafafa;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --accent: #0a0a0a;
+  --accent-foreground: #fafafa;
+  --radius: 1rem;
+  --font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", Consolas, monospace;
+}
+
+:root[data-theme="dark"],
+:root.dark {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #141414;
+  --muted: #1c1c1c;
+  --muted-foreground: #a1a1aa;
+  --border: #262626;
+  --input: #262626;
+  --accent: #fafafa;
+  --accent-foreground: #0a0a0a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px 20px 40px;
+}
+
+@media (max-width: 980px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+}
+
+.app-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.app-header .sub {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.app-header .spacer {
+  margin-left: auto;
+}
+
+.theme-toggle {
+  border: 1px solid var(--border);
+  background: transparent;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  background: var(--muted);
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--card) 60%, transparent);
+  padding: 18px;
+}
+
+.card h2 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* ── Форма скана ── */
+
+.scan-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.scan-form .row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.url-input {
+  flex: 1 1 320px;
+  background: var(--background);
+  border: 1px solid var(--input);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  outline: none;
+}
+
+.url-input:focus {
+  border-color: var(--foreground);
+}
+
+.scan-button {
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  padding: 10px 20px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.scan-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mode-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mode-chip {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: transparent;
+  padding: 8px 12px;
+  text-align: left;
+  cursor: pointer;
+  min-width: 150px;
+}
+
+.mode-chip[aria-pressed="true"] {
+  border-color: var(--foreground);
+  background: var(--muted);
+}
+
+.mode-chip .name {
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.mode-chip .desc {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.hint {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+/* ── Прогресс ── */
+
+.progress-track {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 15%, transparent);
+  overflow: hidden;
+}
+
+.progress-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  transform: scaleX(var(--progress, 0));
+  border-radius: 999px;
+  background: var(--foreground);
+  transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.phase-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.phase-list li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.phase-list li.done,
+.phase-list li.active {
+  color: var(--foreground);
+}
+
+.phase-dot {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.phase-list li.done .phase-dot {
+  background: var(--foreground);
+  color: var(--background);
+  border-color: var(--foreground);
+}
+
+.phase-list li.active .phase-dot {
+  border-color: color-mix(in srgb, var(--foreground) 60%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-fill {
+    transition: none;
+  }
+}
+
+/* ── Отчёт: бенто со скорами ── */
+
+.bento {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.widget {
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  background: color-mix(in srgb, var(--card) 50%, transparent);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.widget .widget-title {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.score-ring {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 999px;
+  border: 4px solid color-mix(in srgb, var(--foreground) 20%, transparent);
+  border-top-color: var(--foreground);
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  margin: 0 auto;
+}
+
+.score-ring.mid {
+  border-top-color: color-mix(in srgb, var(--foreground) 70%, transparent);
+  color: color-mix(in srgb, var(--foreground) 80%, transparent);
+}
+
+.score-ring.low {
+  border-top-color: color-mix(in srgb, var(--foreground) 40%, transparent);
+  color: var(--muted-foreground);
+}
+
+.verdict {
+  text-align: center;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.counts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.counts .count-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.counts .count-row span:last-child {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+
+/* ── Вкладки секций отчёта ── */
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  border: 1px solid var(--border);
+  background: transparent;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tab[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: var(--accent);
+}
+
+/* ── Находки ── */
+
+.finding {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 60%, transparent);
+  padding: 14px;
+}
+
+.finding + .finding {
+  margin-top: 10px;
+}
+
+.finding .finding-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.finding .finding-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.severity {
+  margin-left: auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.severity.high {
+  border-color: color-mix(in srgb, var(--foreground) 50%, transparent);
+  background: color-mix(in srgb, var(--foreground) 15%, transparent);
+}
+
+.severity.medium {
+  border-color: color-mix(in srgb, var(--foreground) 35%, transparent);
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.severity.low {
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+.finding p {
+  margin: 8px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.finding .quote {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.node-selectors {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.node-selectors code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--muted);
+  border-radius: 6px;
+  padding: 2px 8px;
+  overflow-wrap: anywhere;
+}
+
+/* ── Баннер неполного отчёта ── */
+
+.incomplete-banner {
+  border: 1px dashed color-mix(in srgb, var(--foreground) 50%, transparent);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.incomplete-banner .mark {
+  border: 1px solid var(--foreground);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.incomplete-banner ul {
+  margin: 0;
+  padding-left: 18px;
+  flex: 1 1 240px;
+}
+
+.continue-button {
+  border: 1px solid var(--foreground);
+  border-radius: 10px;
+  background: transparent;
+  padding: 8px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.continue-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── История ── */
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 520px;
+  overflow: auto;
+}
+
+.history-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  background: transparent;
+  text-align: left;
+  width: 100%;
+}
+
+.history-item:hover,
+.history-item.selected {
+  background: var(--muted);
+}
+
+.history-item .host {
+  font-weight: 600;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.history-item .meta {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.history-item .scores {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  margin-top: 4px;
+  display: flex;
+  gap: 10px;
+}
+
+.incomplete-tag {
+  border: 1px dashed var(--muted-foreground);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 10px;
+}
+
+.ghost-button {
+  border: 1px solid var(--border);
+  background: transparent;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ghost-button:hover {
+  background: var(--muted);
+}
+
+/* ── Первый запуск ── */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 50;
+}
+
+.first-run {
+  max-width: 560px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.first-run h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.consent {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.consent input {
+  margin-top: 3px;
+  accent-color: var(--foreground);
+}
+
+.start-button {
+  align-self: flex-start;
+}
+
+.error-text {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.section-gap > * + * {
+  margin-top: 10px;
+}
+
+.tech-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.tech-table th,
+.tech-table td {
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+}
+
+.tech-table th {
+  color: var(--muted-foreground);
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}

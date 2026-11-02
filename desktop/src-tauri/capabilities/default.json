@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Основное окно: вызов команд приложения (состояние, история, sidecar-движок, браузер)",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

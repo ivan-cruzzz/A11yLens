@@ -1,0 +1,16 @@
+# Node
+node_modules/
+
+# Сборка фронта
+dist/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Sidecar: артефакты SEA-сборки (пересоздаются scripts/build-sidecar.mjs)
+sidecar/engine-bundle.cjs
+sidecar/sea-prep.blob
+sidecar/pw/
+src-tauri/binaries/*.exe
+src-tauri/binaries/pw/
