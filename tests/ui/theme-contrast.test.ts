@@ -207,6 +207,7 @@ describe("контраст собственных экранов в обеих �
     if (!browser) {
       console.warn(skipHint());
       ctx.skip();
+      return;
     }
     await runAxe(browser, caseLight());
   }, 60_000);
@@ -215,6 +216,7 @@ describe("контраст собственных экранов в обеих �
     if (!browser) {
       console.warn(skipHint());
       ctx.skip();
+      return;
     }
     await runAxe(browser, caseDark());
   }, 60_000);
@@ -223,6 +225,7 @@ describe("контраст собственных экранов в обеих �
     if (!browser) {
       console.warn(skipHint());
       ctx.skip();
+      return;
     }
     await runAxe(browser, caseSystemDark());
   }, 60_000);
