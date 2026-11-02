@@ -27,7 +27,7 @@ export default function Home() {
             className="flex items-center gap-2 font-semibold tracking-tight"
             href="/"
           >
-            <span className="grid size-8 place-items-center rounded-lg bg-primary/15 text-primary">
+            <span className="grid size-8 place-items-center rounded-lg bg-accent/10 text-accent">
               <ScanEyeIcon aria-hidden="true" className="size-5" />
             </span>
             A11yLens
@@ -47,7 +47,7 @@ export default function Home() {
           >
             <div className="mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-20 sm:px-6 @3xl:grid-cols-2 @3xl:py-28">
               <div>
-                <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-primary text-xs font-medium">
+                <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-accent text-xs font-medium">
                   {t("hero.badge")}
                 </p>
                 <h1 className="text-balance font-semibold text-4xl tracking-tight sm:text-5xl">
@@ -99,7 +99,7 @@ export default function Home() {
                   <li className="flex gap-4" key={step.n}>
                     <span
                       aria-hidden="true"
-                      className="grid size-10 shrink-0 place-items-center rounded-xl border border-primary/30 bg-primary/10 font-mono text-primary text-sm"
+                      className="grid size-10 shrink-0 place-items-center rounded-xl border border-accent/30 bg-accent/10 font-mono text-accent text-sm"
                     >
                       {step.n}
                     </span>

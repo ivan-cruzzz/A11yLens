@@ -81,7 +81,7 @@ export default function ViolationRow({
           title={violation.title}
         >
           <button
-            className="group flex w-full items-start gap-3 rounded-xl border border-border bg-card/60 p-4 text-left outline-none transition-colors duration-150 hover:border-primary/40 hover:bg-card focus-visible:ring-2 focus-visible:ring-primary/40"
+            className="group flex w-full items-start gap-3 rounded-xl border border-border bg-card/60 p-5 text-left outline-none transition-colors duration-150 hover:border-foreground/30 hover:bg-card focus-visible:ring-2 focus-visible:ring-accent/40"
             type="button"
           >
             <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-muted font-mono text-muted-foreground text-xs">
@@ -104,16 +104,16 @@ export default function ViolationRow({
                   </span>
                 ) : null}
               </span>
-              <span className="mt-1 block truncate font-mono text-muted-foreground text-xs">
+              <span className="mt-1.5 block truncate font-mono text-muted-foreground text-xs">
                 {violation.nodes[0]?.selector}
               </span>
               {foundOn ? (
-                <span className="mt-1 inline-block rounded-full border border-border px-2 py-0.5 font-mono text-muted-foreground text-[11px]">
+                <span className="mt-1.5 inline-block rounded-full border border-border px-2 py-0.5 font-mono text-muted-foreground text-[11px]">
                   страница: {foundOn}
                 </span>
               ) : null}
             </span>
-            <span className="mt-1 hidden items-center gap-1 text-muted-foreground text-xs transition-colors group-hover:text-primary sm:flex">
+            <span className="mt-1 hidden items-center gap-1 text-muted-foreground text-xs transition-colors group-hover:text-accent sm:flex">
               Детали
               <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
             </span>
@@ -130,7 +130,7 @@ export default function ViolationRow({
           </span>
           <input
             checked={fixed}
-            className="size-4 accent-[var(--foreground)]"
+            className="size-4 accent-[var(--accent)]"
             onChange={(event) => onToggleFixed(event.target.checked)}
             type="checkbox"
           />

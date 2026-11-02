@@ -23,6 +23,13 @@ export const metadata: Metadata = {
     "Введите URL — получите отчёт по контрастам, alt-текстам и клавиатурной навигации с AI-советами по исправлению, скриншотами нарушений и экспортом в PDF.",
 };
 
+/**
+ * Применяет сохранённую тему до первой отрисовки: data-theme на <html>
+ * (light/dark/system) и класс dark для Tailwind-варианта. Без скрипта —
+ * светлая вспышка на тёмной системной теме.
+ */
+const themeInitScript = `(function(){try{var t=localStorage.getItem("a11ylens:theme:v1");if(t!=="light"&&t!=="dark"&&t!=="system")t="system";var d=t==="dark"||(t==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);var r=document.documentElement;r.dataset.theme=t;r.classList.toggle("dark",d)}catch(e){}})()`;
+
 export default function RootLayout({
   children,
 }: {
@@ -31,9 +38,12 @@ export default function RootLayout({
   return (
     <html
       lang="ru"
+      data-theme="system"
+      suppressHydrationWarning
       className={`dark ${plexSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <I18nProvider>
           <ToastProvider>{children}</ToastProvider>
         </I18nProvider>

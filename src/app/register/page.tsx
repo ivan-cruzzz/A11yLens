@@ -10,6 +10,7 @@ import {
   avatarSeed,
 } from "@/components/kokonutui/avatar-picker";
 import { normalizeNextPath, saveAccount } from "@/lib/account";
+import { ThemeToggle } from "@/lib/theme";
 
 function RegisterForm() {
   const searchParams = useSearchParams();
@@ -233,17 +234,20 @@ export default function RegisterPage() {
             className="flex items-center gap-2 font-semibold tracking-tight"
             href="/"
           >
-            <span className="grid size-8 place-items-center rounded-lg bg-primary/15 text-primary">
+            <span className="grid size-8 place-items-center rounded-lg bg-accent/10 text-accent">
               <ScanEyeIcon aria-hidden="true" className="size-5" />
             </span>
             A11yLens
           </Link>
-          <Link
-            className="rounded-lg px-3 py-2 text-muted-foreground text-sm transition-colors hover:text-foreground"
-            href="/"
-          >
-            На главную
-          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Link
+              className="rounded-lg px-3 py-2 text-muted-foreground text-sm transition-colors hover:text-foreground"
+              href="/"
+            >
+              На главную
+            </Link>
+          </div>
         </div>
       </header>
       <main className="grid flex-1 place-items-center px-4 py-12 sm:px-6">

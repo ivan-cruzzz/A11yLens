@@ -67,6 +67,10 @@ export const DICT = {
     "register.siteName": "Название сайта",
     "guide.title": "Гайд по WCAG 2.2",
     "guide.toScanner": "К сканеру",
+    "theme.toggle": "Тема",
+    "theme.light": "Светлая",
+    "theme.dark": "Тёмная",
+    "theme.system": "Системная",
     "common.currentPlan": "Текущий план",
     "features.title": "Что покажет отчёт",
     "features.subtitle":
@@ -137,6 +141,10 @@ export const DICT = {
     "register.siteName": "Site name",
     "guide.title": "WCAG 2.2 guide",
     "guide.toScanner": "To scanner",
+    "theme.toggle": "Theme",
+    "theme.light": "Light",
+    "theme.dark": "Dark",
+    "theme.system": "System",
     "common.currentPlan": "Current plan",
     "features.title": "What the report shows",
     "features.subtitle":

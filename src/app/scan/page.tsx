@@ -15,7 +15,9 @@ import {
   CameraIcon,
   ContrastIcon,
   CreditCardIcon,
+  EyeIcon,
   FileDownIcon,
+  HistoryIcon,
   ImageOffIcon,
   KeyboardIcon,
   ListChecksIcon,
@@ -84,6 +86,7 @@ import AiChat from "@/components/app/ai-chat";
 import AccountStats from "@/components/app/account-stats";
 import ScoreSparkline from "@/components/app/score-sparkline";
 import { downloadReportCsv, downloadReportJson } from "@/lib/export-file";
+import { ThemeToggle, useTheme } from "@/lib/theme";
 import LimitModal from "@/components/app/limit-modal";
 import {
   CATEGORY_LABELS,
@@ -113,23 +116,15 @@ const STANDARD_LABELS: { id: Standard; label: string }[] = [
   { id: "508", label: "Section 508" },
 ];
 
+// Иерархия через яркость foreground — работает в обеих темах (R06).
 const CATEGORY_TONE: Record<Category, string> = {
-  contrast: "text-zinc-300",
-  alt: "text-zinc-400",
-  keyboard: "text-zinc-300",
-  forms: "text-zinc-400",
-  aria: "text-zinc-300",
-  other: "text-zinc-500",
+  contrast: "text-foreground/85",
+  alt: "text-foreground/75",
+  keyboard: "text-foreground/85",
+  forms: "text-foreground/75",
+  aria: "text-foreground/85",
+  other: "text-muted-foreground",
 };
-
-function applyTheme(theme: "light" | "dark" | "system") {
-  const root = document.documentElement;
-  const dark =
-    theme === "dark" ||
-    (theme === "system" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches);
-  root.classList.toggle("dark", dark);
-}
 
 function ScanPage() {
   const searchParams = useSearchParams();
@@ -155,7 +150,8 @@ function ScanPage() {
   >([]);
 
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [theme, setTheme] = useState<"light" | "dark" | "system">("dark");
+  // Тема: общий стор (localStorage + data-theme на <html>), см. src/lib/theme.
+  const { theme, setTheme, cycleTheme } = useTheme();
   const [pdfBusy, setPdfBusy] = useState(false);
   const [account, setAccount] = useState<Account | null>(null);
   const [plan, setPlanState] = useState<Plan | null>(null);
@@ -389,7 +385,7 @@ function ScanPage() {
             : `${tab.title} · ${violations.length}`,
         icon: tab.icon,
         content: (
-          <div className="grid items-start gap-3 sm:grid-cols-2">
+          <div className="grid items-start gap-4 sm:grid-cols-2">
             {violations.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground sm:col-span-2">
                 Нарушений в этой категории не найдено — так держать!
@@ -424,7 +420,7 @@ function ScanPage() {
         }`,
         icon: ShieldIcon,
         content: (
-          <div className="grid items-start gap-3 sm:grid-cols-2">
+          <div className="grid items-start gap-4 sm:grid-cols-2">
             {audit.error ? (
               <p
                 className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground sm:col-span-2"
@@ -625,7 +621,7 @@ function ScanPage() {
         title: "Сводка",
         defaultSpan: 2,
         render: () => (
-          <ul className="space-y-1 font-mono text-muted-foreground text-xs">
+          <ul className="space-y-1.5 font-mono text-muted-foreground text-xs leading-relaxed">
             <li>Правил пройдено: {result.meta.passedRules}</li>
             <li>Правил нарушено: {result.totalViolations}</li>
             <li>Элементов с проблемой: {result.totalNodes}</li>
@@ -685,12 +681,7 @@ function ScanPage() {
         id: "theme",
         label: "Переключить тему",
         icon: "theme",
-        run: () => {
-          const next = document.documentElement.classList.toggle("dark")
-            ? "dark"
-            : "light";
-          setTheme(next);
-        },
+        run: cycleTheme,
       },
       ...(result
         ? [
@@ -703,7 +694,7 @@ function ScanPage() {
           ]
         : []),
     ],
-    [result, router, exportPdf]
+    [result, router, exportPdf, cycleTheme]
   );
 
   return (
@@ -714,13 +705,14 @@ function ScanPage() {
             className="flex items-center gap-2 font-semibold tracking-tight"
             href="/"
           >
-            <span className="grid size-8 place-items-center rounded-lg bg-primary/15 text-primary">
+            <span className="grid size-8 place-items-center rounded-lg bg-accent/10 text-accent">
               <ScanEyeIcon aria-hidden="true" className="size-5" />
             </span>
             A11yLens
           </Link>
-          {account ? (
-            <div className="shrink-0">
+          <div className="flex shrink-0 items-center gap-2">
+            <ThemeToggle />
+            {account ? (
               <ProfileDropdown
                 accounts={[
                   {
@@ -775,14 +767,11 @@ function ScanPage() {
               // анимации при мгновенной навигации), потом уходим.
               window.setTimeout(() => router.push("/"), 550);
             }}
-            onThemeChange={(next) => {
-              setTheme(next);
-              applyTheme(next);
-            }}
+            onThemeChange={setTheme}
             theme={theme}
           />
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </header>
 
@@ -836,7 +825,7 @@ function ScanPage() {
                     className={cn(
                       "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
                       standard === option.id
-                        ? "bg-primary/15 text-primary"
+                        ? "bg-accent/10 text-accent"
                         : "text-muted-foreground hover:text-foreground"
                     )}
                     key={option.id}
@@ -854,7 +843,7 @@ function ScanPage() {
                     className={cn(
                       "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
                       device === option
-                        ? "bg-primary/15 text-primary"
+                        ? "bg-accent/10 text-accent"
                         : "text-muted-foreground hover:text-foreground"
                     )}
                     key={option}
@@ -874,7 +863,7 @@ function ScanPage() {
                     className={cn(
                       "rounded-lg px-2 py-0.5 font-mono text-xs font-medium transition-colors",
                       maxPages === count
-                        ? "bg-primary/15 text-primary"
+                        ? "bg-accent/10 text-accent"
                         : "text-muted-foreground hover:text-foreground"
                     )}
                     key={count}
@@ -890,7 +879,7 @@ function ScanPage() {
                   <label className="flex cursor-pointer items-center gap-2 text-muted-foreground text-xs">
                     <input
                       checked={watching}
-                      className="size-4 accent-[var(--foreground)]"
+                      className="size-4 accent-[var(--accent)]"
                       onChange={(event) => {
                         const next = event.target.checked;
                         setWatching(next);
@@ -969,7 +958,19 @@ function ScanPage() {
                   </li>
                 ) : null}
               </ul>
-            ) : null}
+            ) : (
+              <p className="mt-4 flex items-start gap-2.5 rounded-xl border border-dashed border-border px-4 py-3.5 text-muted-foreground text-xs leading-relaxed">
+                <EyeIcon
+                  aria-hidden="true"
+                  className="mt-0.5 size-4 shrink-0"
+                />
+                <span>
+                  Пока никто не под наблюдением. Отсканируйте сайт и включите
+                  «Следить за сайтом» — здесь появятся чипы с дельтой скора
+                  между сканами.
+                </span>
+              </p>
+            )}
           </section>
 
           {/* Прогресс: skeleton + степпер */}
@@ -1076,7 +1077,7 @@ function ScanPage() {
                   {planSteps.length > 0 ? (
                     <>
                       <motion.h2
-                        className="mt-12 text-xl font-semibold tracking-tight"
+                        className="mt-14 text-xl font-semibold tracking-tight sm:mt-16"
                         initial={{ opacity: 0, y: 10 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true, margin: "-60px" }}
@@ -1090,11 +1091,11 @@ function ScanPage() {
                       <ol className="mt-4 space-y-3">
                         {planSteps.map((step, index) => (
                           <li
-                            className="rounded-xl border border-border bg-card/60 p-4"
+                            className="rounded-xl border border-border bg-card/60 p-5"
                             key={step.id}
                           >
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted font-mono text-muted-foreground text-xs">
+                              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted font-mono text-muted-foreground text-xs">
                                 {index + 1}
                               </span>
                               <span className="font-medium text-sm">
@@ -1132,13 +1133,13 @@ function ScanPage() {
                   {/* Просканированные страницы (R02) */}
                   {result.pages && result.pages.length > 0 ? (
                     <>
-                      <h2 className="mt-12 text-xl font-semibold tracking-tight">
+                      <h2 className="mt-14 text-xl font-semibold tracking-tight sm:mt-16">
                         Просканированные страницы
                       </h2>
                       <ul className="mt-4 grid gap-2 sm:grid-cols-2">
                         {result.pages.map((page) => (
                           <li
-                            className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card/60 px-4 py-3 text-sm"
+                            className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card/60 px-4 py-3.5 text-sm"
                             key={page.url}
                           >
                             <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
@@ -1161,7 +1162,7 @@ function ScanPage() {
 
                   {/* Нарушения по вкладкам */}
                   <motion.h2
-                    className="mt-12 text-xl font-semibold tracking-tight"
+                    className="mt-14 text-xl font-semibold tracking-tight sm:mt-16"
                     initial={{ opacity: 0, y: 10 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: "-60px" }}
@@ -1174,8 +1175,8 @@ function ScanPage() {
                   </p>
                   <div className="mt-4">
                     <SmoothTab
-                      activeColor="bg-primary"
-                      activeTextColor="text-primary-foreground"
+                      activeColor="bg-accent"
+                      activeTextColor="text-accent-foreground"
                       items={tabItems}
                       label="Категории нарушений"
                     />
@@ -1186,7 +1187,7 @@ function ScanPage() {
               {/* Скриншоты */}
               {lightboxImages.length > 0 && !clean ? (
                 <>
-                  <h2 className="mt-12 flex items-center gap-2 text-xl font-semibold tracking-tight">
+                  <h2 className="mt-14 flex items-center gap-2 text-xl font-semibold tracking-tight sm:mt-16">
                     <CameraIcon
                       aria-hidden="true"
                       className="size-5 text-primary"
@@ -1204,7 +1205,7 @@ function ScanPage() {
               ) : null}
 
               {/* Сохранение и экспорт */}
-              <h2 className="mt-12 text-xl font-semibold tracking-tight">
+              <h2 className="mt-14 text-xl font-semibold tracking-tight sm:mt-16">
                 Сохранить и поделиться
               </h2>
               <div className="mt-4 grid max-w-3xl gap-6 sm:grid-cols-2">
@@ -1329,7 +1330,7 @@ function ScanPage() {
 
           {/* Массовая проверка */}
           <h2
-            className="mt-12 flex items-center gap-2 text-xl font-semibold tracking-tight"
+            className="mt-14 flex items-center gap-2 text-xl font-semibold tracking-tight sm:mt-16"
             id="bulk"
           >
             <SparklesIcon aria-hidden="true" className="size-5 text-primary" />
@@ -1363,7 +1364,7 @@ function ScanPage() {
             <ul className="mt-4 max-w-xl space-y-2">
               {bulk.map((row) => (
                 <li
-                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card/60 px-4 py-3 text-sm"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card/60 px-4 py-3.5 text-sm"
                   key={row.label}
                 >
                   <span className="min-w-0 truncate font-mono text-xs">
@@ -1385,7 +1386,7 @@ function ScanPage() {
 
           {/* История */}
           <motion.h2
-            className="mt-12 text-xl font-semibold tracking-tight"
+            className="mt-14 text-xl font-semibold tracking-tight sm:mt-16"
             id="history"
             initial={{ opacity: 0, y: 10 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -1395,16 +1396,33 @@ function ScanPage() {
           </motion.h2>
           <AccountStats />
           {history.length === 0 ? (
-            <p className="mt-4 max-w-xl rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
-              Пока пусто. Отсканируйте сайт и сохраните отчёт с иконкой —
-              история хранится только в вашем браузере.
-            </p>
+            <div className="mt-4 max-w-xl rounded-2xl border border-dashed border-border bg-card/30 p-8 text-center">
+              <span className="mx-auto grid size-12 place-items-center rounded-full bg-foreground/10 text-muted-foreground">
+                <HistoryIcon aria-hidden="true" className="size-6" />
+              </span>
+              <p className="mt-4 font-semibold">История пока пуста</p>
+              <p className="mx-auto mt-2 max-w-sm text-muted-foreground text-sm leading-relaxed">
+                Отсканируйте первый сайт и сохраните отчёт — он осядет здесь со
+                спарклайном оценок. История хранится только в вашем браузере.
+              </p>
+              <button
+                className="mt-5 inline-flex h-10 items-center gap-2 rounded-xl bg-accent px-4 font-medium text-accent-foreground text-sm transition-opacity hover:opacity-90"
+                onClick={() => {
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                  urlInputRef.current?.focus();
+                }}
+                type="button"
+              >
+                <ScanEyeIcon aria-hidden="true" className="size-4" />
+                Проверить первый сайт
+              </button>
+            </div>
           ) : (
             <>
               <ul className="mt-4 space-y-3">
                 {history.map((entry) => (
                   <li
-                    className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card/60 p-4"
+                    className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card/60 p-5 transition-colors duration-150 hover:border-foreground/25 hover:bg-card"
                     key={entry.id}
                   >
                     <span

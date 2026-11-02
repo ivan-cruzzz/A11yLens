@@ -33,7 +33,7 @@ export default function SecurityRow({
   return (
     <div
       className={cn(
-        "rounded-xl border border-border bg-card/60 p-4 transition-opacity",
+        "rounded-xl border border-border bg-card/60 p-5 transition-opacity",
         fixed && "opacity-60"
       )}
     >
@@ -83,7 +83,7 @@ export default function SecurityRow({
         <label className="mt-3 flex cursor-pointer items-center gap-2 text-muted-foreground text-xs">
           <input
             checked={fixed}
-            className="size-4 accent-[var(--foreground)]"
+            className="size-4 accent-[var(--accent)]"
             onChange={(event) => onToggleFixed(event.target.checked)}
             type="checkbox"
           />

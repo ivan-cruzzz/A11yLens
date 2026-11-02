@@ -11,6 +11,7 @@ import {
 } from "@/components/kokonutui/avatar-picker";
 import { loadAccount, registerPathIfNeeded, type Account } from "@/lib/account";
 import { LocaleToggle, useT } from "@/lib/i18n";
+import { ThemeToggle } from "@/lib/theme";
 
 /** Навигация шапки лендинга: ссылки, профиль и CTA с гейтом регистрации. */
 export default function LandingNav() {
@@ -54,6 +55,7 @@ export default function LandingNav() {
         {t("nav.how")}
       </a>
       <LocaleToggle />
+      <ThemeToggle />
       {account && face ? (
         <Link
           className="mr-1 flex min-w-0 items-center gap-2 rounded-full border border-border py-1 pl-1 pr-3 transition-colors hover:border-foreground/30"

@@ -49,6 +49,7 @@
 }
 
 :root {
+  color-scheme: light;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -61,12 +62,13 @@
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  /* Акцент поверх монохрома: синий, читаемый на светлом фоне (>5.5:1). */
+  --accent: oklch(0.488 0.243 264.376);
+  --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: oklch(0.488 0.243 264.376);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -83,7 +85,14 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-.dark {
+/*
+ * Тёмная тема: атрибут data-theme на <html> (dark / system при тёмной
+ * системной) плюс класс .dark — его переключает src/lib/theme.tsx для
+ * Tailwind-варианта dark:. Тело блока ниже держите синхронным в обоих местах.
+ */
+.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
   --background: #0a0a0a;
   --foreground: #fafafa;
   --card: #141414;
@@ -96,12 +105,13 @@
   --secondary-foreground: #fafafa;
   --muted: #1c1c1c;
   --muted-foreground: #a1a1aa;
-  --accent: #1c1c1c;
-  --accent-foreground: #fafafa;
+  /* Акцент поверх монохрома: светлый синий, читаемый на тёмном фоне (>7:1). */
+  --accent: oklch(0.707 0.165 254.624);
+  --accent-foreground: oklch(0.145 0 0);
   --destructive: #ef4444;
   --border: #262626;
   --input: #262626;
-  --ring: #71717a;
+  --ring: oklch(0.707 0.165 254.624);
   --chart-1: #d4d4d8;
   --chart-2: #a1a1aa;
   --chart-3: #71717a;
@@ -117,6 +127,44 @@
   --sidebar-ring: #71717a;
 }
 
+/* Системная тема: системные настройки решают (matchMedia на стороне CSS). */
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] {
+    color-scheme: dark;
+    --background: #0a0a0a;
+    --foreground: #fafafa;
+    --card: #141414;
+    --card-foreground: #fafafa;
+    --popover: #141414;
+    --popover-foreground: #fafafa;
+    --primary: #fafafa;
+    --primary-foreground: #0a0a0a;
+    --secondary: #1c1c1c;
+    --secondary-foreground: #fafafa;
+    --muted: #1c1c1c;
+    --muted-foreground: #a1a1aa;
+    --accent: oklch(0.707 0.165 254.624);
+    --accent-foreground: oklch(0.145 0 0);
+    --destructive: #ef4444;
+    --border: #262626;
+    --input: #262626;
+    --ring: oklch(0.707 0.165 254.624);
+    --chart-1: #d4d4d8;
+    --chart-2: #a1a1aa;
+    --chart-3: #71717a;
+    --chart-4: #52525b;
+    --chart-5: #3f3f46;
+    --sidebar: #141414;
+    --sidebar-foreground: #fafafa;
+    --sidebar-primary: #fafafa;
+    --sidebar-primary-foreground: #0a0a0a;
+    --sidebar-accent: #1c1c1c;
+    --sidebar-accent-foreground: #fafafa;
+    --sidebar-border: #262626;
+    --sidebar-ring: #71717a;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -129,5 +177,51 @@
   }
   html {
     @apply font-sans;
+  }
+  /*
+   * Микроанимации: спокойные переходы цвета у интерактивных элементов.
+   * Утилити-классы (transition-*) перекрывают эту базу, где нужен свой ритм.
+   */
+  button, a, [role="button"], [role="tab"], summary {
+    transition-property: color, background-color, border-color, outline-color, opacity, box-shadow, fill, stroke;
+    transition-duration: 160ms;
+    transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  /*
+   * prefers-reduced-motion: системная настройка гасит CSS-анимации и
+   * переходы глобально (JS-анимации motion уважают её сами — bento-grid,
+   * smooth-tab, halftone-background проверяют matchMedia).
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Скелетон загрузки: мягкий пробег световой волны поверх заглушки. */
+@utility skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--foreground) 7%, transparent),
+      transparent
+    );
+    animation: skeleton-sweep 1.8s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+  }
+}
+@keyframes skeleton-sweep {
+  100% {
+    transform: translateX(100%);
   }
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion } from "motion/react";
 import { ScanEyeIcon } from "lucide-react";
 import { GUIDE_SECTIONS } from "@/lib/guide";
+import { ThemeToggle } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 const PROGRESS_KEY = "a11ylens:guide-progress:v1";
@@ -54,17 +55,20 @@ export default function GuidePage() {
             className="flex items-center gap-2 font-semibold tracking-tight"
             href="/"
           >
-            <span className="grid size-8 place-items-center rounded-lg bg-primary/15 text-primary">
+            <span className="grid size-8 place-items-center rounded-lg bg-accent/10 text-accent">
               <ScanEyeIcon aria-hidden="true" className="size-5" />
             </span>
             A11yLens
           </Link>
-          <Link
-            className="rounded-lg px-3 py-2 text-muted-foreground text-sm transition-colors hover:text-foreground"
-            href="/scan"
-          >
-            К сканеру
-          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Link
+              className="rounded-lg px-3 py-2 text-muted-foreground text-sm transition-colors hover:text-foreground"
+              href="/scan"
+            >
+              К сканеру
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -132,7 +136,7 @@ export default function GuidePage() {
                       >
                         <input
                           checked={checked}
-                          className="mt-0.5 size-4 shrink-0 accent-[var(--foreground)]"
+                          className="mt-0.5 size-4 shrink-0 accent-[var(--accent)]"
                           onChange={() => toggle(rule.id)}
                           type="checkbox"
                         />

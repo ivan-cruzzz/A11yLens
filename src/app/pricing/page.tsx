@@ -7,6 +7,7 @@ import { ScanEyeIcon } from "lucide-react";
 import PlanCards from "@/components/app/plan-cards";
 import CheckoutModal from "@/components/app/checkout-modal";
 import { getPlan, PLANS, type PlanId } from "@/lib/subscription";
+import { ThemeToggle } from "@/lib/theme";
 
 export default function PricingPage() {
   const [currentPlanId, setCurrentPlanId] = useState<PlanId>("free");
@@ -33,17 +34,20 @@ export default function PricingPage() {
             className="flex items-center gap-2 font-semibold tracking-tight"
             href="/"
           >
-            <span className="grid size-8 place-items-center rounded-lg bg-primary/15 text-primary">
+            <span className="grid size-8 place-items-center rounded-lg bg-accent/10 text-accent">
               <ScanEyeIcon aria-hidden="true" className="size-5" />
             </span>
             A11yLens
           </Link>
-          <Link
-            className="rounded-lg px-3 py-2 text-muted-foreground text-sm transition-colors hover:text-foreground"
-            href="/scan"
-          >
-            К сканеру
-          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Link
+              className="rounded-lg px-3 py-2 text-muted-foreground text-sm transition-colors hover:text-foreground"
+              href="/scan"
+            >
+              К сканеру
+            </Link>
+          </div>
         </div>
       </header>
 
