@@ -7,7 +7,7 @@
  * деградация с пометкой, а не падение скана.
  */
 
-import { computeSecurityScore } from "../scoring";
+import { SEVERITY_ORDER, computeSecurityScore } from "../scoring";
 import { normalizeUrl, assertPublicHttpUrl } from "../url-guard";
 import { checkLibraryCves, fetchOsv, librariesFromTechnologies } from "./cve";
 import { auditEmailSecurity, createTxtCache, resolveTxtDns } from "./email";
@@ -89,10 +89,10 @@ const emptyReport = (url: string, host: string, mode: NativeScanMode): NativeRep
   degradations: [],
 });
 
-const sortFindings = (findings: NativeFinding[]): NativeFinding[] => {
-  const order: Record<string, number> = { high: 0, medium: 1, low: 2, info: 3 };
-  return [...findings].sort((a, b) => order[a.severity] - order[b.severity]);
-};
+const sortFindings = (findings: NativeFinding[]): NativeFinding[] =>
+  [...findings].sort(
+    (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
+  );
 
 /** Реальная загрузка страницы лёгким GET — HTML нужен только инвентарю технологий. */
 export async function fetchPage(url: string): Promise<PageFetchResult> {

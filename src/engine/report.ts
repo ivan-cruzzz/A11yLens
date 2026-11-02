@@ -8,6 +8,7 @@
 import {
   IMPACT_ORDER,
   IMPACT_WEIGHTS,
+  SEVERITY_ORDER,
   SEVERITY_WEIGHTS,
   computeAccessibilityScore,
   computeSecurityScore,
@@ -314,8 +315,6 @@ export function buildRemediationPlan(
     return [];
   }
 
-  const severityRank: Record<string, number> = { high: 0, medium: 1, low: 2, info: 3 };
-
   const a11ySteps: RemediationStep[] = result.violations.map((violation) => {
     const effort = estimateA11yEffort(violation);
     const recipe = tipFor(violation.id).full;
@@ -354,10 +353,10 @@ export function buildRemediationPlan(
       }
       const rank = (step: RemediationStep) =>
         step.kind === "security"
-          ? severityRank[
+          ? SEVERITY_ORDER[
               result.security?.findings.find((f) => f.id === step.id)
                 ?.severity ?? "info"
-            ] ?? 3
+            ]
           : IMPACT_ORDER[
               result.violations.find((v) => v.id === step.id)?.impact ?? "minor"
             ] ?? 3;

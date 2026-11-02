@@ -337,6 +337,9 @@ export function attachEvidence(
  * На время `run` оборачивает globalThis.fetch и записывает ответы,
  * подходящие под `match`. Best-effort: при параллельных сканах в одном
  * процессе запись может перемешаться — attachEvidence тогда берёт fallback.
+ * Восстановление условное: если поверх нас уже стоит чужая подмена
+ * (параллельный скан), её не затираем — иначе первый завершившийся
+ * рекордер вернул бы нативный fetch и убил запись второго.
  */
 export async function withFetchRecorder<T>(
   match: (url: string) => boolean,
@@ -371,7 +374,9 @@ export async function withFetchRecorder<T>(
     const value = await run();
     return { value, log };
   } finally {
-    globalThis.fetch = original;
+    if (globalThis.fetch === recorded) {
+      globalThis.fetch = original;
+    }
   }
 }
 

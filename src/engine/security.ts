@@ -3,7 +3,7 @@ import type {
   SecurityFinding,
   SecuritySeverity,
 } from "./types";
-import { computeSecurityScore } from "./scoring";
+import { SEVERITY_ORDER, computeSecurityScore } from "./scoring";
 
 /**
  * Пассивные проверки кибербезопасности по данным одной загрузки страницы:
@@ -370,10 +370,17 @@ export async function probeSensitiveFiles(
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 4000);
         const response = await fetch(`${origin}${probe.path}`, {
+          redirect: "manual",
           signal: controller.signal,
           headers: { "user-agent": "A11yLens-security-audit" },
         });
         clearTimeout(timer);
+        if (response.status >= 300 && response.status < 400) {
+          // Редирект не проверяем: сканируемый сайт может 302-м увести пробу
+          // на внутренний адрес (SSRF), а фильтр смотрит только исходный хост.
+          // Тело редиректа не читаем — это не evidence нашего сайта.
+          return null;
+        }
         if (!response.ok) {
           return null;
         }
@@ -459,16 +466,10 @@ export const SECURITY_CHECKS: readonly SecurityCheckMeta[] = [
 // ── Сборка аудита ────────────────────────────────────────────────────────────
 
 export function buildSecurityAudit(findings: SecurityFinding[]): SecurityAudit {
-  const order: Record<SecuritySeverity, number> = {
-    high: 0,
-    medium: 1,
-    low: 2,
-    info: 3,
-  };
   return {
     score: computeSecurityScore(findings),
     findings: [...findings].sort(
-      (a, b) => order[a.severity] - order[b.severity]
+      (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
     ),
     checksRun: SECURITY_CHECKS.length,
   };

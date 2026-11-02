@@ -31,13 +31,16 @@ const fakeResponse = (
   }) as unknown as Response;
 
 const stubFetch = (
-  handler: (url: string) => Response | Promise<Response>
+  handler: (
+    url: string,
+    init?: Parameters<typeof fetch>[1]
+  ) => Response | Promise<Response>
 ) => {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: string | URL | Request) => {
+    vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
-      return handler(url);
+      return handler(url, init);
     })
   );
 };
@@ -230,6 +233,24 @@ describe("probeSensitiveFiles", () => {
   it("сетевая ошибка пробы не роняет аудит", async () => {
     stubFetch(() => Promise.reject(new Error("ETIMEDOUT")));
     expect(await probeSensitiveFiles("http://example.com")).toEqual([]);
+  });
+
+  it("302-редирект пробы не даёт находку: redirect manual, 3xx — проба не удалась", async () => {
+    stubFetch((url, init) => {
+      if (new URL(url).pathname !== "/.env") {
+        return fakeResponse(404, "");
+      }
+      // Настоящий fetch с redirect:"follow" сам дошёл бы до цели редиректа
+      // и отдал бы её тело; с "manual" возвращает сам 302. Двойник
+      // воспроизводит оба режима, как делает реальный fetch.
+      if (init?.redirect === "manual") {
+        return fakeResponse(302, "", {
+          location: "http://169.254.169.254/latest/meta-data/",
+        });
+      }
+      return fakeResponse(200, "DB_PASSWORD=leaked-through-redirect");
+    });
+    expect(ids(await probeSensitiveFiles("http://example.com"))).toEqual([]);
   });
 
   it("пробы идут параллельно: 5 проб по 40 мс укладываются быстрее 120 мс", async () => {

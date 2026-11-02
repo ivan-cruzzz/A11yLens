@@ -26,6 +26,14 @@ export const SEVERITY_WEIGHTS: Record<SecuritySeverity, number> = {
   info: 0,
 };
 
+/** Порядок сортировки security-находок: от серьёзных к справочным. */
+export const SEVERITY_ORDER: Record<SecuritySeverity, number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+  info: 3,
+};
+
 /** Минимальная форма нарушения, достаточная для подсчёта скора. */
 export interface ScoredViolation {
   impact: Impact;

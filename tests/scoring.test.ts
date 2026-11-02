@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  IMPACT_ORDER,
   IMPACT_WEIGHTS,
+  SEVERITY_ORDER,
   SEVERITY_WEIGHTS,
   computeAccessibilityScore,
   computeSecurityScore,
 } from "../src/engine";
+import * as libTypes from "../src/lib/types";
 
 describe("computeAccessibilityScore", () => {
   it("пустой список нарушений → 100", () => {
@@ -77,6 +80,20 @@ describe("веса скоринга — единственный источни�
       medium: 10,
       low: 5,
       info: 0,
+    });
+  });
+
+  it("SEVERITY_ORDER задаёт порядок high→info = 0..3 (из находки ревью)", () => {
+    expect(SEVERITY_ORDER).toEqual({ high: 0, medium: 1, low: 2, info: 3 });
+  });
+
+  it("IMPACT_ORDER доступен клиентским модулям через @/lib/types без копии", () => {
+    expect(libTypes.IMPACT_ORDER).toBe(IMPACT_ORDER);
+    expect(libTypes.IMPACT_ORDER).toEqual({
+      critical: 0,
+      serious: 1,
+      moderate: 2,
+      minor: 3,
     });
   });
 });

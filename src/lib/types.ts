@@ -4,3 +4,7 @@
  */
 
 export * from "../engine/types";
+
+// Порядок критичности живёт в engine/scoring.ts (единственный источник
+// скоринга) — для клиентских модулей только перепривязка, без копии словаря.
+export { IMPACT_ORDER } from "../engine/scoring";

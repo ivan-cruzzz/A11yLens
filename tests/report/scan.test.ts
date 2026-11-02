@@ -372,4 +372,49 @@ describe("withFetchRecorder", () => {
     expect(log[0].bodyHead).toContain("probe-body");
     expect(globalThis.fetch).toBe(originalFetch);
   });
+
+  it("два параллельных рекордера не убивают запись друг друга", async () => {
+    // Гейты фиксируют порядок: A ставит подмену, B ставит поверх неё,
+    // A делает fetch и завершается раньше B — только затем B делает свой fetch.
+    const deferred = () => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((r) => {
+        resolve = r;
+      });
+      return { promise, resolve };
+    };
+    const recorderStarted = deferred();
+    const recorderATeardownDone = deferred();
+
+    const recorderA = withFetchRecorder(
+      () => true,
+      async () => {
+        await recorderStarted.promise;
+        const response = await fetch("data:text/plain,first-body");
+        await response.text();
+      }
+    );
+    const recorderB = withFetchRecorder(
+      () => true,
+      async () => {
+        await recorderATeardownDone.promise;
+        const response = await fetch("data:text/plain,second-body");
+        await response.text();
+      }
+    );
+
+    // Обе подмены установлены — разрешаем A: его fetch пройдёт через обе
+    // обёртки, затем A восстановит fetch (пока B ещё ждёт).
+    recorderStarted.resolve();
+    const resultA = await recorderA;
+    // A завершён — теперь B делает свой fetch: запись B должна выжить.
+    recorderATeardownDone.resolve();
+    const resultB = await recorderB;
+
+    const bodiesA = resultA.log.map((entry) => entry.bodyHead);
+    expect(bodiesA).toContain("first-body");
+    const bodiesB = resultB.log.map((entry) => entry.bodyHead);
+    expect(bodiesB).toContain("second-body");
+    expect(bodiesB).toContain("first-body");
+  });
 });

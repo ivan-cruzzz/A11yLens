@@ -5,7 +5,12 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { MessageSquareIcon, SendIcon, SparklesIcon, XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CATEGORY_LABELS, IMPACT_LABELS, type ScanResult } from "@/lib/types";
+import {
+  CATEGORY_LABELS,
+  IMPACT_LABELS,
+  IMPACT_ORDER,
+  type ScanResult,
+} from "@/lib/types";
 import { buildAdvice } from "@/lib/knowledge";
 
 interface ChatMessage {
@@ -21,14 +26,6 @@ const QUICK_PROMPTS = [
   "Как проверить скринридером?",
 ];
 
-function impactRank(impact: string): number {
-  return (
-    { critical: 0, serious: 1, moderate: 2, minor: 3 }[
-      impact as "critical" | "serious" | "moderate" | "minor"
-    ] ?? 4
-  );
-}
-
 /**
  * Rule-based ответы по текущему отчёту (без внешнего API):
  * ищем самое критичное нарушение и отдаём совет из knowledge.
@@ -41,7 +38,7 @@ function answerFor(question: string, result: ScanResult | null): string {
   }
 
   const worst = [...result.violations].sort(
-    (a, b) => impactRank(a.impact) - impactRank(b.impact)
+    (a, b) => IMPACT_ORDER[a.impact] - IMPACT_ORDER[b.impact]
   )[0];
 
   if (q.includes("начать") || q.includes("перв")) {
