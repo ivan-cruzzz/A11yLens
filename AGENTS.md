@@ -1,15 +1,45 @@
 <!-- autopilot:start -->
 # A11yLens
 
-Сканер доступности (WCAG 2.2) и кибербезопасности сайтов на Next.js — для аудиторов, разработчиков и владельцев сайтов.
+Сканер доступности (WCAG 2.2) и кибербезопасности сайтов: веб на Next.js, CLI и Windows-десктоп (Tauri).
 
 ## Команды
 
 | Команда | Что делает |
 |---------|------------|
-| `npm install` | Установить зависимости |
-| `npm run dev` | Запустить локально |
-| `npm run build` | Продакшен-сборка |
+| `npm install` | зависимости |
+| `npm run build` | продакшен-сборка Next.js |
+| `npm test` | все тесты vitest (19 файлов; браузерные — skip без Playwright-браузеров) |
+| `npx vitest run tests/security.test.ts` | один файл тестов |
+| `npm run cli -- scan <url> [--json\|--csv\|--security-only\|--a11y-only\|--max-pages N\|--timeout ms\|--fail-under N\|--mode quick\|normal\|deep]` | CLI-скан; exit 0 — успех, 1 — ниже `--fail-under`, 2 — ошибка скана |
+| `npm run scan:self` | self-scan локальной фикстурной страницы (нужен Playwright-браузер) |
+| `cd desktop && npm install && npm test` | тесты десктопа (34) |
+| `cd desktop && npm run build:sidecar && npm run tauri build` | сборка десктопа: NSIS/MSI в `desktop/src-tauri/target/release/bundle/` |
+
+## Где что
+
+- `src/engine/` — движок сканера: `runScan` (`run-scan.ts`), `runNativeAudit` (`native/`), реестры проверок `SECURITY_CHECKS`/`NATIVE_CHECKS`; скоринг — `scoring.ts` (словари весов и порядков — единственный источник).
+- `src/engine/advice/` — словари советов и объяснений без ИИ (`RULE_TIPS`, `tipFor`).
+- `src/cli/` — терминальный клиент: `bin.mjs` (bin `a11ylens`), флаги и exit codes — `scan-command.ts`.
+- `desktop/` — Tauri-приложение Windows: sidecar SEA — `scripts/build-sidecar.mjs`, механика продолжения скана — `desktop/README.md`.
+- `tests/` — vitest по зонам (security, native, report, cli, ui) + `tests/fixtures/`.
+- `docs/IDEAS.md` — идеи развития.
+
+## Подводные камни
+
+- Playwright-браузеры обязательны для браузерного скана и self-scan: `npx playwright install chromium` (в этой среде CDN гео-блок — браузеров нет, браузерные тесты skip).
+- vitest — ^3, не 5: vitest@5 конфликтует с `@types/node@20`.
+- Словари порядков (`IMPACT_ORDER`, `SEVERITY_ORDER`) — только из `src/engine/scoring.ts`, копий не заводить.
+- Sidecar SEA патчит якоря playwright-core (`desktop/scripts/build-sidecar.mjs`) — апгрейд playwright ломает сборку sidecar.
+- Node ≥22.6 для CLI: `src/cli/bin.mjs` работает type-stripping'ом, без сборки.
+
+## Окружение
+
+- `A11YLENS_ENGINE` — путь к sidecar-движку для десктопа (резолв: env → рядом с exe → ресурс → dev-фолбэк `node src/cli/bin.mjs`).
+
+## Архитектура
+
+Единицы, границы, контракты, швы для тестов — `docs/architecture.md`; решения «почему так» — `docs/adr/`.
 
 ## Как здесь работает Autopilot
 
