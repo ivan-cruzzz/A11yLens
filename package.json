@@ -7,18 +7,24 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
-    "scan:self": "vitest run --config vitest.self.config.ts"
+    "scan:self": "vitest run --config vitest.self.config.ts",
+    "cli": "node src/cli/bin.mjs"
+  },
+  "bin": {
+    "a11ylens": "src/cli/bin.mjs"
   },
   "dependencies": {
     "@axe-core/playwright": "^4.14.0",
     "axe-core": "^4.14.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.0",
+    "commander": "^15.0.0",
     "html2canvas-pro": "^2.5.2",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.61.0",
     "motion": "^14.6.0",
     "next": "16.4.3",
+    "picocolors": "^1.1.1",
     "playwright": "^1.64.1",
     "radix-ui": "^1.8.1",
     "react": "19.3.0",
