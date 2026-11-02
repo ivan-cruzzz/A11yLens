@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# python
+__pycache__/
 
 # vercel
 .vercel
@@ -46,3 +50,4 @@ next-env.d.ts
 
 # zcode session files
 .zcode/
+.autopilot/serve.*
