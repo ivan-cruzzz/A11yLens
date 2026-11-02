@@ -3,6 +3,7 @@ import type {
   SecurityFinding,
   SecuritySeverity,
 } from "./types";
+import { computeSecurityScore } from "./scoring";
 
 /**
  * Пассивные проверки кибербезопасности по данным одной загрузки страницы:
@@ -361,59 +362,103 @@ const SENSITIVE_PATHS: {
 export async function probeSensitiveFiles(
   origin: string
 ): Promise<SecurityFinding[]> {
-  const findings: SecurityFinding[] = [];
-  for (const probe of SENSITIVE_PATHS) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 4000);
-      const response = await fetch(`${origin}${probe.path}`, {
-        signal: controller.signal,
-        headers: { "user-agent": "A11yLens-security-audit" },
-      });
-      clearTimeout(timer);
-      if (!response.ok) {
-        continue;
-      }
-      const body = (await response.text()).slice(0, 4096);
-      if (!probe.match || probe.match.test(body)) {
-        findings.push(
-          finding(
+  // Пробы независимы — идут параллельно, суммарное время = худшей пробе,
+  // а не сумме всех.
+  const results = await Promise.all(
+    SENSITIVE_PATHS.map(async (probe): Promise<SecurityFinding | null> => {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 4000);
+        const response = await fetch(`${origin}${probe.path}`, {
+          signal: controller.signal,
+          headers: { "user-agent": "A11yLens-security-audit" },
+        });
+        clearTimeout(timer);
+        if (!response.ok) {
+          return null;
+        }
+        const body = (await response.text()).slice(0, 4096);
+        if (!probe.match || probe.match.test(body)) {
+          return finding(
             probe.id,
             probe.title,
             probe.severity,
             `GET ${probe.path} отвечает ${response.status} с ожидаемым содержимым.`,
             probe.recommendation
-          )
-        );
+          );
+        }
+        return null;
+      } catch {
+        // Сетевая ошибка/таймаут — проба не удалась, не находка.
+        return null;
       }
-    } catch {
-      // Сетевая ошибка/таймаут — проба не удалась, не находка.
-    }
-  }
-  return findings;
+    })
+  );
+  return results.filter(
+    (item): item is SecurityFinding => item !== null
+  );
 }
+
+// ── Реестр проверок ──────────────────────────────────────────────────────────
+
+export type SecurityCheckArea =
+  | "headers"
+  | "cookies"
+  | "page"
+  | "versions"
+  | "network"
+  | "probes";
+
+export interface SecurityCheckMeta {
+  /** id находки, которую выдаёт проверка. */
+  id: string;
+  area: SecurityCheckArea;
+  /** Короткое имя проверки для списков в UI. */
+  title: string;
+}
+
+/**
+ * Реестр всех security-проверок — единственный источник для
+ * `checksRun` и для списка проверок в UI. Никакого хардкода количества.
+ */
+export const SECURITY_CHECKS: readonly SecurityCheckMeta[] = [
+  { id: "sec-csp", area: "headers", title: "Content-Security-Policy" },
+  { id: "sec-hsts", area: "headers", title: "Strict-Transport-Security" },
+  {
+    id: "sec-clickjacking",
+    area: "headers",
+    title: "X-Frame-Options / frame-ancestors",
+  },
+  { id: "sec-nosniff", area: "headers", title: "X-Content-Type-Options" },
+  { id: "sec-referrer", area: "headers", title: "Referrer-Policy" },
+  { id: "sec-permissions", area: "headers", title: "Permissions-Policy" },
+  { id: "sec-coop", area: "headers", title: "Cross-Origin-Opener-Policy" },
+  { id: "sec-cookie-secure", area: "cookies", title: "Куки: флаг Secure" },
+  { id: "sec-cookie-httponly", area: "cookies", title: "Куки: флаг HttpOnly" },
+  { id: "sec-cookie-samesite", area: "cookies", title: "Куки: SameSite" },
+  { id: "sec-mixed-content", area: "page", title: "Mixed content" },
+  { id: "sec-sri", area: "page", title: "Subresource Integrity" },
+  {
+    id: "sec-version-disclosure",
+    area: "versions",
+    title: "Раскрытие версий",
+  },
+  { id: "sec-jquery-version", area: "versions", title: "Версия jQuery" },
+  { id: "sec-https-redirect", area: "network", title: "HTTPS-редирект" },
+  { id: "sec-git-exposed", area: "probes", title: "Каталог .git" },
+  { id: "sec-env-exposed", area: "probes", title: "Файл .env" },
+  { id: "sec-phpinfo", area: "probes", title: "phpinfo.php" },
+  {
+    id: "sec-backup-config",
+    area: "probes",
+    title: "Резервная копия конфига",
+  },
+  { id: "sec-dsstore", area: "probes", title: ".DS_Store" },
+];
 
 // ── Сборка аудита ────────────────────────────────────────────────────────────
 
-const SEVERITY_WEIGHT: Record<SecuritySeverity, number> = {
-  high: 20,
-  medium: 10,
-  low: 5,
-  info: 0,
-};
-
-export function computeSecurityScore(findings: SecurityFinding[]): number {
-  const penalty = findings.reduce(
-    (sum, item) => sum + SEVERITY_WEIGHT[item.severity],
-    0
-  );
-  return Math.max(0, Math.min(100, 100 - penalty));
-}
-
-export function buildSecurityAudit(
-  findings: SecurityFinding[],
-  checksRun: number
-): SecurityAudit {
+export function buildSecurityAudit(findings: SecurityFinding[]): SecurityAudit {
   const order: Record<SecuritySeverity, number> = {
     high: 0,
     medium: 1,
@@ -425,6 +470,14 @@ export function buildSecurityAudit(
     findings: [...findings].sort(
       (a, b) => order[a.severity] - order[b.severity]
     ),
-    checksRun,
+    checksRun: SECURITY_CHECKS.length,
   };
+}
+
+/**
+ * Сбой аудита виден в отчёте строкой ошибки,
+ * а не молчаливым исчезновением секции безопасности.
+ */
+export function failedSecurityAudit(reason: string): SecurityAudit {
+  return { score: 0, findings: [], checksRun: 0, error: reason };
 }

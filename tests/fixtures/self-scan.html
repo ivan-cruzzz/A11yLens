@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+  <!-- Подложено: нет атрибута lang → html-has-lang -->
+  <head>
+    <meta charset="utf-8" />
+    <title>A11yLens self-scan fixture</title>
+  </head>
+  <body>
+    <main>
+      <h1>Страница самопроверки сканера</h1>
+      <p>
+        На этой странице намеренно подложены нарушения доступности
+        и отсутствуют защитные заголовки — по ним прогоняется smoke-тест
+        движка (npm run scan:self).
+      </p>
+
+      <!-- Подложено: картинка без alt → image-alt -->
+      <img src="logo.png" width="80" height="40" />
+
+      <!-- Подложено: кнопка без доступного имени → button-name -->
+      <button type="button"></button>
+
+      <!-- Подложено: ссылка без доступного имени (только скрытая иконка) → link-name -->
+      <a href="/details"><span aria-hidden="true">→</span></a>
+
+      <ul>
+        <li>Один пункт списка</li>
+        <li>Другой пункт списка</li>
+      </ul>
+    </main>
+  </body>
+</html>

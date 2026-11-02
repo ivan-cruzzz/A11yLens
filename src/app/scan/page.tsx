@@ -60,17 +60,15 @@ import {
   canScan,
   getPlan,
   getUsageToday,
-  recordScan,
   type Plan,
 } from "@/lib/subscription";
-import { saveReportFull, getReportsByHost, getPreviousReport } from "@/lib/report-store";
-import { computeDiff, type ScanDiff } from "@/lib/scan-diff";
+import { getReportsByHost } from "@/lib/report-store";
+import { type ScanDiff } from "@/lib/scan-diff";
+import { submitScan } from "@/lib/scan-submit";
 import {
   addToWatchlist,
-  isWatched,
   loadWatchlist,
   removeFromWatchlist,
-  updateWatchEntry,
   type WatchEntry,
 } from "@/lib/watchlist";
 import ScanDiffCard from "@/components/app/scan-diff";
@@ -207,32 +205,14 @@ function ScanPage() {
         2600
       );
       try {
-        const response = await fetch("/api/scan", {
-          body: JSON.stringify({ url: target, standard, device }),
-          headers: { "Content-Type": "application/json" },
-          method: "POST",
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.error ?? "Ошибка сканирования");
+        const submission = await submitScan({ url: target, standard, device });
+        setResult(submission.result);
+        setDiff(submission.diff);
+        setWatching(submission.watching);
+        if (submission.watchEntries) {
+          setWatchEntries(submission.watchEntries);
         }
-        recordScan();
-        saveReportFull(payload as ScanResult);
-        setResult(payload as ScanResult);
-        const scanned = payload as ScanResult;
-        const previous = getPreviousReport(scanned.host, scanned.scannedAt);
-        setDiff(previous ? computeDiff(scanned, previous) : null);
-        setWatching(isWatched(scanned.host));
-        if (isWatched(scanned.host)) {
-          const { entries, prevScore } = updateWatchEntry(
-            scanned.host,
-            scanned.score
-          );
-          setWatchEntries(entries);
-          setWatchDelta(prevScore === null ? null : scanned.score - prevScore);
-        } else {
-          setWatchDelta(null);
-        }
+        setWatchDelta(submission.watchDelta);
         toast("Скан завершён — отчёт готов");
       } catch (scanError) {
         setResult(null);
@@ -266,30 +246,20 @@ function ScanPage() {
       setScanning(true);
       setError(null);
       try {
-        const response = await fetch("/api/scan", {
-          body: JSON.stringify({ ...target, standard, device }),
-          headers: { "Content-Type": "application/json" },
-          method: "POST",
+        const submission = await submitScan({
+          url: target.url,
+          html: target.html,
+          standard,
+          device,
         });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.error ?? "Ошибка сканирования");
-        }
-        const scanned = payload as ScanResult;
-        recordScan();
-        saveReportFull(scanned);
+        const scanned = submission.result;
         setResult(scanned);
-        const previous = getPreviousReport(scanned.host, scanned.scannedAt);
-        setDiff(previous ? computeDiff(scanned, previous) : null);
-        setWatching(isWatched(scanned.host));
-        if (isWatched(scanned.host)) {
-          const { entries, prevScore } = updateWatchEntry(
-            scanned.host,
-            scanned.score
-          );
-          setWatchEntries(entries);
-          setWatchDelta(prevScore === null ? null : scanned.score - prevScore);
+        setDiff(submission.diff);
+        setWatching(submission.watching);
+        if (submission.watchEntries) {
+          setWatchEntries(submission.watchEntries);
         }
+        setWatchDelta(submission.watchDelta);
         toast("Скан завершён — отчёт готов");
         setUrl(scanned.url === "HTML-файл" ? target.label : scanned.url);
         setBulk((prev) =>

@@ -1,14 +1,7 @@
 import jsPDF from "jspdf";
 import type { ScanResult } from "./types";
-import { CATEGORY_LABELS, CATEGORY_ORDER } from "./types";
+import { CATEGORY_LABELS, CATEGORY_ORDER, IMPACT_LABELS } from "./types";
 import { buildAdvice, type EngineId } from "./knowledge";
-
-const IMPACT_RU: Record<string, string> = {
-  critical: "критичная",
-  serious: "серьёзная",
-  moderate: "средняя",
-  minor: "незначительная",
-};
 
 /**
  * Собирает отчёт в скрытом DOM-контейнере, рисует его в canvas
@@ -106,7 +99,7 @@ function buildHtml(result: ScanResult, engine: EngineId): string {
       <div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;gap:8px;">
           <strong style="font-size:13px;">${index + 1}. ${esc(violation.title)}</strong>
-          <span style="font-size:11px;color:#64748b;white-space:nowrap;">${CATEGORY_LABELS[violation.category]} · ${IMPACT_RU[violation.impact] ?? violation.impact}</span>
+          <span style="font-size:11px;color:#64748b;white-space:nowrap;">${CATEGORY_LABELS[violation.category]} · ${IMPACT_LABELS[violation.impact] ?? violation.impact}</span>
         </div>
         <div style="margin-top:4px;font-size:11px;color:#334155;">${esc(advice.short)}</div>
         ${nodes}
